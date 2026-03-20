@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { ukmApi } from "@/core/api";
 import { useDashboard, useInvalidateDashboard } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import type { Message } from "@/core/types";
@@ -41,6 +42,12 @@ export default function InboxScreen() {
         </Text>
       </Screen>
     );
+  }
+
+  const requiredRoute = getPostAuthRoute(dashboard.profile);
+
+  if (requiredRoute !== "/(tabs)/share") {
+    return <Redirect href={requiredRoute} />;
   }
 
   const visibleMessages = dashboard.messages.filter((message) => !message.isSeeded);

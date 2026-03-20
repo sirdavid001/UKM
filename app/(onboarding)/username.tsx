@@ -4,6 +4,7 @@ import { Text, View } from "react-native";
 
 import { ukmApi } from "@/core/api";
 import { useDashboard, useInvalidateDashboard } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import { AppTextInput, FieldLabel, GradientHero, PrimaryButton, Screen, SectionCard } from "@/ui/primitives";
@@ -19,6 +20,20 @@ export default function UsernameScreen() {
 
   if (!sessionUser) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  if (dashboard?.profile) {
+    if (!dashboard.profile.dob) {
+      return <Redirect href="/(onboarding)/age" />;
+    }
+
+    if (!dashboard.profile.displayName && !dashboard.profile.avatarUrl) {
+      return <Redirect href="/(onboarding)/profile" />;
+    }
+
+    if (dashboard.profile.username) {
+      return <Redirect href={getPostAuthRoute(dashboard.profile)} />;
+    }
   }
 
   const user = sessionUser;

@@ -4,6 +4,7 @@ import { Text, View } from "react-native";
 
 import { ukmApi } from "@/core/api";
 import { useDashboard, useInvalidateDashboard } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import { AppTextInput, FieldLabel, GradientHero, PrimaryButton, Screen, SectionCard } from "@/ui/primitives";
@@ -23,6 +24,16 @@ export default function ProfileScreen() {
     return <Redirect href="/(auth)/login" />;
   }
 
+  if (dashboard?.profile) {
+    if (!dashboard.profile.dob) {
+      return <Redirect href="/(onboarding)/age" />;
+    }
+
+    if (dashboard.profile.displayName || dashboard.profile.avatarUrl) {
+      return <Redirect href={getPostAuthRoute(dashboard.profile)} />;
+    }
+  }
+
   const user = sessionUser;
 
   async function saveProfile() {
@@ -32,6 +43,7 @@ export default function ProfileScreen() {
       await ukmApi.saveProfile(user, {
         displayName: displayName.trim() || fallbackName,
         avatarUrl: avatarUrl.trim(),
+        dob: dashboard?.profile.dob,
       });
       await invalidateDashboard();
       router.replace("/");

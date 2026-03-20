@@ -3,15 +3,16 @@ import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import { env } from "@/core/env";
 import { Redirect, router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Modal, Pressable, ScrollView, Share, Text, View } from "react-native";
 
 import { PROMPT_TEMPLATES, SHARE_CHANNELS } from "@/core/config";
 import { ukmApi } from "@/core/api";
 import { useDashboard, useInvalidateDashboard } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
-import type { CopyVariantKey } from "@/core/types";
+import type { CopyVariantKey, LinkChannel } from "@/core/types";
 import { GradientHero, Pill, PrimaryButton, Screen, SectionCard, SectionTitle } from "@/ui/primitives";
 
 export default function ShareScreen() {
@@ -22,6 +23,7 @@ export default function ShareScreen() {
   const [copyVariant, setCopyVariant] = useState<CopyVariantKey>("a");
   const [shareOpen, setShareOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const recoveryTracked = useRef(false);
 
   if (!sessionUser) {
     return <Redirect href="/(auth)/login" />;
@@ -39,6 +41,12 @@ export default function ShareScreen() {
     );
   }
 
+  const requiredRoute = getPostAuthRoute(dashboard.profile);
+
+  if (requiredRoute !== "/(tabs)/share") {
+    return <Redirect href={requiredRoute} />;
+  }
+
   const activePrompt = dashboard.prompts.find((prompt) => prompt.id === dashboard.profile.activePromptId) ?? PROMPT_TEMPLATES[0];
   const organicCount = dashboard.messages.filter((message) => !message.isSeeded && message.status === "visible").length;
   const shareCount = dashboard.linkEvents.filter((event) => event.eventType === "share").length;
@@ -47,23 +55,41 @@ export default function ShareScreen() {
   const zeroMessageRecovery =
     organicCount === 0 && shareCount === 0 && boostEndsAt && Date.now() - (boostEndsAt - 24 * 60 * 60 * 1000) > 6 * 60 * 60 * 1000;
   const recoveryPrompt = dashboard.prompts.find((prompt) => prompt.id !== activePrompt.id) ?? PROMPT_TEMPLATES[1];
-  const profileUrl = `${env.appUrl}/u/${dashboard.profile.username}`;
   const shareCaption = activePrompt.copyVariants[copyVariant];
   const momentum = dashboard.messages.filter((message) => !message.isSeeded && message.status === "visible").length;
   const socialProof = organicCount > 0 ? "People are answering this" : "Be the first to reply";
+  const baseProfileUrl = `${env.appUrl}/u/${dashboard.profile.username}`;
+
+  function buildAttributedUrl(channel: LinkChannel) {
+    const query = `v=${encodeURIComponent(copyVariant)}&ch=${encodeURIComponent(channel)}`;
+    return `${baseProfileUrl}?${query}`;
+  }
+
   const shareButtons = useMemo(
     () =>
       SHARE_CHANNELS.map((channel) => ({
         ...channel,
         onPress: () => handleShare(channel.key),
       })),
-    [shareCaption, profileUrl, dashboard.profile.username, copyVariant],
+    [baseProfileUrl, copyVariant, shareCaption],
   );
+
+  useEffect(() => {
+    if (!zeroMessageRecovery || recoveryTracked.current) {
+      return;
+    }
+
+    recoveryTracked.current = true;
+    void ukmApi.trackOwnerLinkEvent(user.email, "recovery_view", "app", copyVariant, {
+      suggestedPromptId: recoveryPrompt.id,
+    });
+  }, [copyVariant, recoveryPrompt.id, user.email, zeroMessageRecovery]);
 
   async function handleShare(channel: "whatsapp" | "instagram_story" | "generic") {
     try {
       setBusy(true);
-      const payload = `${shareCaption}\n${profileUrl}`;
+      const shareUrl = buildAttributedUrl(channel);
+      const payload = `${shareCaption}\n${shareUrl}`;
 
       if (channel === "whatsapp") {
         const url = `https://wa.me/?text=${encodeURIComponent(payload)}`;
@@ -74,7 +100,7 @@ export default function ShareScreen() {
           await Share.share({ message: payload });
         }
       } else if (channel === "instagram_story") {
-        await Share.share({ message: `${shareCaption}\n${profileUrl}` });
+        await Share.share({ message: payload });
       } else {
         await Share.share({ message: payload });
       }
@@ -88,14 +114,14 @@ export default function ShareScreen() {
   }
 
   async function copyLink() {
-    await Clipboard.setStringAsync(`${shareCaption}\n${profileUrl}`);
-    await ukmApi.trackShare(user.email, "copy", copyVariant);
+    await Clipboard.setStringAsync(`${shareCaption}\n${buildAttributedUrl("copy")}`);
+    await ukmApi.trackOwnerLinkEvent(user.email, "copy_link", "copy", copyVariant);
     await invalidateDashboard();
   }
 
   async function shareStoryPreview() {
     if (await Sharing.isAvailableAsync()) {
-      await Share.share({ message: `${shareCaption}\n${profileUrl}` });
+      await Share.share({ message: `${shareCaption}\n${buildAttributedUrl("generic")}` });
     }
   }
 
@@ -227,7 +253,7 @@ export default function ShareScreen() {
                 {shareCaption}
               </Text>
               <Text className="mt-5 font-body text-xs uppercase tracking-[1.8px]" style={{ color: palette.textMuted }}>
-                {profileUrl}
+                {buildAttributedUrl("generic")}
               </Text>
             </SectionCard>
             <View className="gap-3">

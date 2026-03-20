@@ -12,34 +12,17 @@ Deno.serve(async (req) => {
     const { data: authData } = await authed.auth.getUser();
     if (!authData.user) throw new Error("Unauthorized");
 
-    const body = await req.json();
-    const dob = body.dob;
-    const displayName = body.displayName;
-    const avatarUrl = body.avatarUrl;
-    const birthDate = new Date(dob);
-    const age = (Date.now() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-    if (Number.isNaN(birthDate.getTime()) || age < 18) throw new Error("User must be 18+");
-
-    const payload: Record<string, string | null> = {
-      dob,
-      updated_at: new Date().toISOString(),
-    };
-
-    if ("displayName" in body) {
-      payload.display_name = displayName ?? null;
-    }
-
-    if ("avatarUrl" in body) {
-      payload.avatar_url = avatarUrl ?? null;
-    }
+    const { senderIdentityId } = await req.json();
+    if (!senderIdentityId) throw new Error("Missing sender identity");
 
     const { error } = await admin
-      .from("profiles")
-      .update(payload)
-      .eq("id", authData.user.id);
+      .from("blocked_senders")
+      .delete()
+      .eq("user_id", authData.user.id)
+      .eq("sender_identity_id", senderIdentityId);
     if (error) throw error;
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ unblocked: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

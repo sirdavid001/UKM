@@ -8,10 +8,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     const admin = createAdminClient();
-    const { username, eventType, copyVariantKey } = await req.json();
+    const { username, eventType, copyVariantKey, channel } = await req.json();
     const normalized = String(username ?? "").trim().toLowerCase();
     const allowed = new Set(["view", "open_app"]);
+    const allowedChannels = new Set(["whatsapp", "instagram_story", "generic", "copy", "app", "unknown"]);
     if (!allowed.has(String(eventType))) throw new Error("Unsupported event");
+    const normalizedChannel = allowedChannels.has(String(channel)) ? String(channel) : "unknown";
 
     const { data: publicProfile } = await admin.rpc("get_public_profile", { target_username: normalized });
     const profile = publicProfile?.[0];
@@ -20,7 +22,7 @@ Deno.serve(async (req: Request) => {
     const { error } = await admin.from("link_events").insert({
       user_id: profile.id,
       event_type: eventType,
-      channel: eventType === "open_app" ? "app" : "unknown",
+      channel: normalizedChannel,
       copy_variant_key: copyVariantKey ?? null,
       metadata: {},
     });

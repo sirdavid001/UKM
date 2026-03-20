@@ -1,16 +1,19 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 
 import { getOrCreateSenderSession } from "@/core/sender-session";
 import { usePublicProfile } from "@/core/hooks";
 import { useTheme } from "@/core/theme";
 import { ukmApi } from "@/core/api";
+import type { CopyVariantKey, LinkChannel } from "@/core/types";
 import { AppTextInput, FieldLabel, GradientHero, Pill, PrimaryButton, Screen, SectionCard } from "@/ui/primitives";
 
 export default function PublicProfileScreen() {
-  const params = useLocalSearchParams<{ username: string }>();
+  const params = useLocalSearchParams<{ username: string; v?: string; ch?: string }>();
   const username = Array.isArray(params.username) ? params.username[0] : params.username;
+  const rawVariant = Array.isArray(params.v) ? params.v[0] : params.v;
+  const rawChannel = Array.isArray(params.ch) ? params.ch[0] : params.ch;
   const { data: profile, isLoading } = usePublicProfile(username ?? "");
   const { palette } = useTheme();
   const [senderSessionId, setSenderSessionId] = useState<string | null>(null);
@@ -19,8 +22,12 @@ export default function PublicProfileScreen() {
   const [success, setSuccess] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [variant] = useState<"a" | "b">("a");
   const trackedView = useRef(false);
+  const variant = useMemo<CopyVariantKey>(() => (rawVariant === "b" ? "b" : "a"), [rawVariant]);
+  const channel = useMemo<LinkChannel>(() => {
+    const allowed: LinkChannel[] = ["whatsapp", "instagram_story", "generic", "copy", "app", "unknown"];
+    return allowed.includes((rawChannel as LinkChannel) ?? "unknown") ? ((rawChannel as LinkChannel) ?? "unknown") : "unknown";
+  }, [rawChannel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +81,8 @@ export default function PublicProfileScreen() {
     }
 
     trackedView.current = true;
-    void ukmApi.trackPublicEvent(currentProfile.username, "view", variant);
-  }, [currentProfile.username, variant]);
+    void ukmApi.trackPublicEvent(currentProfile.username, "view", variant, channel);
+  }, [channel, currentProfile.username, variant]);
 
   async function submit() {
     try {
@@ -88,7 +95,7 @@ export default function PublicProfileScreen() {
         senderSessionId: currentSessionId,
         senderConfidence,
         copyVariantKey: variant,
-        channel: "unknown",
+        channel,
       });
 
       if (!result.accepted) {
@@ -106,7 +113,7 @@ export default function PublicProfileScreen() {
   }
 
   async function openApp() {
-    await ukmApi.trackPublicEvent(currentProfile.username, "open_app", variant);
+    await ukmApi.trackPublicEvent(currentProfile.username, "open_app", variant, channel);
     const deepLink = `ukm://u/${currentProfile.username}`;
     const canOpen = await Linking.canOpenURL(deepLink);
 
@@ -127,6 +134,35 @@ export default function PublicProfileScreen() {
           body={currentProfile.organicSubmissions7d > 0 ? "People are answering this." : "Be the first to reply."}
         />
         <View className="mt-5 gap-5">
+          <SectionCard>
+            <View className="flex-row items-center">
+              {currentProfile.avatarUrl ? (
+                <Image
+                  source={{ uri: currentProfile.avatarUrl }}
+                  className="h-14 w-14 rounded-full"
+                  resizeMode="cover"
+                />
+              ) : (
+                <View className="h-14 w-14 items-center justify-center rounded-full" style={{ backgroundColor: palette.cardMuted }}>
+                  <Text className="font-display text-xl" style={{ color: palette.text }}>
+                    {(currentProfile.displayName ?? currentProfile.username).slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View className="ml-4 flex-1">
+                <Text className="font-display text-2xl" style={{ color: palette.text }}>
+                  {currentProfile.displayName ?? `@${currentProfile.username}`}
+                </Text>
+                <Text className="mt-1 font-body text-sm" style={{ color: palette.textMuted }}>
+                  @{currentProfile.username}
+                </Text>
+              </View>
+            </View>
+            <Text className="mt-4 font-body text-sm leading-6" style={{ color: palette.textMuted }}>
+              Reply anonymously to the prompt below. No account, no name, just one honest answer.
+            </Text>
+          </SectionCard>
+
           <SectionCard>
             <Text className="font-body text-xs uppercase tracking-[2px]" style={{ color: palette.textMuted }}>
               Suggested replies

@@ -2,6 +2,7 @@ export type ThemePreference = "light" | "dark" | "system";
 export type MessageStatus = "visible" | "filtered" | "archived" | "flagged";
 export type BoostState = "none" | "first_24h";
 export type CopyVariantKey = "a" | "b";
+export type LinkChannel = "whatsapp" | "instagram_story" | "generic" | "copy" | "app" | "unknown";
 
 export type AppFlags = {
   launchMode: boolean;
@@ -75,7 +76,7 @@ export type LinkEvent = {
     | "open_app"
     | "inbox_open"
     | "recovery_view";
-  channel: "whatsapp" | "instagram_story" | "generic" | "copy" | "app" | "unknown";
+  channel: LinkChannel;
   copyVariantKey: CopyVariantKey | null;
   createdAt: string;
   metadata: Record<string, string | number | boolean | null>;
@@ -85,6 +86,12 @@ export type ReportRecord = {
   id: string;
   messageId: string;
   reporterId: string;
+  reason: string;
+  createdAt: string;
+};
+
+export type BlockedSenderRecord = {
+  senderIdentityId: string;
   reason: string;
   createdAt: string;
 };
@@ -110,7 +117,7 @@ export type SubmitMessageInput = {
   senderSessionId: string;
   senderConfidence: "high" | "low";
   copyVariantKey: CopyVariantKey;
-  channel?: LinkEvent["channel"];
+  channel?: LinkChannel;
 };
 
 export type SubmitMessageResult = {
@@ -124,7 +131,7 @@ export type DashboardSnapshot = {
   prompts: PromptTemplate[];
   messages: Message[];
   hiddenWords: string[];
-  blockedSenderIds: string[];
+  blockedSenders: BlockedSenderRecord[];
   linkEvents: LinkEvent[];
   flags: AppFlags;
 };

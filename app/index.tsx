@@ -1,13 +1,13 @@
 import { Redirect } from "expo-router";
 import { Text, View } from "react-native";
 
-import { useDashboard, useBootstrapSession } from "@/core/hooks";
+import { useDashboard } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import { Screen } from "@/ui/primitives";
 
 export default function IndexScreen() {
-  useBootstrapSession();
   const sessionUser = useAppStore((state) => state.sessionUser);
   const hydrated = useAppStore((state) => state.hydrated);
   const { data: dashboard, isLoading } = useDashboard();
@@ -29,17 +29,5 @@ export default function IndexScreen() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  if (!dashboard?.profile.dob) {
-    return <Redirect href="/(onboarding)/age" />;
-  }
-
-  if (!dashboard.profile.displayName && !dashboard.profile.avatarUrl) {
-    return <Redirect href="/(onboarding)/profile" />;
-  }
-
-  if (!dashboard.profile.username) {
-    return <Redirect href="/(onboarding)/username" />;
-  }
-
-  return <Redirect href="/(tabs)/share" />;
+  return <Redirect href={getPostAuthRoute(dashboard?.profile)} />;
 }

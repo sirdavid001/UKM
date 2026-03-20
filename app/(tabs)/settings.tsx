@@ -4,6 +4,7 @@ import { ScrollView, Text, View } from "react-native";
 
 import { ukmApi } from "@/core/api";
 import { useDashboard, useInvalidateDashboard, useSignOut } from "@/core/hooks";
+import { getPostAuthRoute } from "@/core/routing";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import { AppTextInput, FieldLabel, Pill, PrimaryButton, Screen, SectionCard, SectionTitle } from "@/ui/primitives";
@@ -33,6 +34,12 @@ export default function SettingsScreen() {
         </Text>
       </Screen>
     );
+  }
+
+  const requiredRoute = getPostAuthRoute(dashboard.profile);
+
+  if (requiredRoute !== "/(tabs)/share") {
+    return <Redirect href={requiredRoute} />;
   }
 
   async function saveTheme(next: "light" | "dark" | "system") {
@@ -90,6 +97,41 @@ export default function SettingsScreen() {
               ) : (
                 dashboard.hiddenWords.map((word) => (
                   <Pill key={word} label={word} onPress={() => ukmApi.removeHiddenWord(user, word).then(invalidateDashboard)} />
+                ))
+              )}
+            </View>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle title="Blocked senders" hint="Launch moderation should be reversible. Tap a blocked sender to unblock them." />
+            <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+              {dashboard.blockedSenders.length} blocked
+            </Text>
+            <View className="mt-4 gap-3">
+              {dashboard.blockedSenders.length === 0 ? (
+                <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                  No blocked senders yet.
+                </Text>
+              ) : (
+                dashboard.blockedSenders.map((sender) => (
+                  <SectionCard key={sender.senderIdentityId} className="px-4 py-4">
+                    <Text className="font-body text-xs uppercase tracking-[1.6px]" style={{ color: palette.textMuted }}>
+                      {sender.reason.replace(/_/g, " ")}
+                    </Text>
+                    <Text className="mt-2 font-body text-sm" style={{ color: palette.text }}>
+                      Sender {sender.senderIdentityId.slice(0, 8)}
+                    </Text>
+                    <Text className="mt-1 font-body text-sm" style={{ color: palette.textMuted }}>
+                      Blocked {new Date(sender.createdAt).toLocaleDateString()}
+                    </Text>
+                    <View className="mt-3">
+                      <PrimaryButton
+                        label="Unblock"
+                        onPress={() => ukmApi.unblockSender(user, sender.senderIdentityId).then(invalidateDashboard)}
+                        tone="ghost"
+                      />
+                    </View>
+                  </SectionCard>
                 ))
               )}
             </View>

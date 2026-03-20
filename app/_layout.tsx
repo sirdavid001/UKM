@@ -2,9 +2,12 @@ import "../global.css";
 
 import { Stack } from "expo-router";
 
+import { useBootstrapSession } from "@/core/hooks";
 import { AppProviders } from "@/providers/AppProviders";
 
 export default function RootLayout() {
+  useBootstrapSession();
+
   return (
     <AppProviders>
       <Stack screenOptions={{ headerShown: false }}>

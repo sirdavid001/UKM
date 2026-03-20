@@ -6,9 +6,11 @@ import { isSupabaseConfigured } from "@/core/env";
 import { supabase } from "@/core/supabase";
 import type {
   AppFlags,
+  BlockedSenderRecord,
   CopyVariantKey,
   DashboardSnapshot,
   LinkEvent,
+  LinkChannel,
   Message,
   Profile,
   PublicProfile,
@@ -28,7 +30,7 @@ type MockDb = {
   profiles: Profile[];
   messages: Message[];
   hiddenWords: { userId: string; word: string }[];
-  blockedSenders: { userId: string; senderIdentityId: string; reason: string }[];
+  blockedSenders: { userId: string; senderIdentityId: string; reason: string; createdAt: string }[];
   reports: ReportRecord[];
   linkEvents: LinkEvent[];
   senderIdentities: SenderIdentity[];
@@ -392,7 +394,9 @@ async function buildMockDashboard(email: string): Promise<DashboardSnapshot> {
     prompts: PROMPT_TEMPLATES,
     messages: sortInbox(messages),
     hiddenWords: db.hiddenWords.filter((item) => item.userId === profile.id).map((item) => item.word),
-    blockedSenderIds: db.blockedSenders.filter((item) => item.userId === profile.id).map((item) => item.senderIdentityId),
+    blockedSenders: db.blockedSenders
+      .filter((item) => item.userId === profile.id)
+      .map((item) => ({ senderIdentityId: item.senderIdentityId, reason: item.reason, createdAt: item.createdAt })),
     linkEvents: db.linkEvents.filter((item) => item.userId === profile.id),
     flags: db.appFlags,
   };
@@ -502,7 +506,7 @@ export const ukmApi = {
         supabase.from("app_flags").select("*").limit(1).single(),
         supabase.from("messages").select("*").eq("recipient_id", session.id).order("created_at", { ascending: false }),
         supabase.from("hidden_words").select("word").eq("user_id", session.id),
-        supabase.from("blocked_senders").select("sender_identity_id").eq("user_id", session.id),
+        supabase.from("blocked_senders").select("sender_identity_id, reason, created_at").eq("user_id", session.id),
         supabase.from("link_events").select("*").eq("user_id", session.id).order("created_at", { ascending: false }),
       ]);
 
@@ -516,7 +520,7 @@ export const ukmApi = {
       prompts: (templates ?? []).map(mapPromptTemplate),
       messages: sortInbox((messages ?? []).map(mapRemoteMessage)),
       hiddenWords: (hiddenWords ?? []).map((row) => row.word),
-      blockedSenderIds: (blocks ?? []).map((row) => row.sender_identity_id),
+      blockedSenders: (blocks ?? []).map(mapRemoteBlockedSender),
       linkEvents: (linkEvents ?? []).map(mapRemoteLinkEvent),
       flags: mapRemoteFlags(flags),
     };
@@ -534,11 +538,15 @@ export const ukmApi = {
       return updateMockProfile(session.email, (profile) => ({ ...profile, dob }));
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .upsert({ id: session.id, email: session.email, dob, updated_at: nowIso() })
-      .select("*")
-      .single();
+    const { error: invokeError } = await supabase.functions.invoke("complete-onboarding", {
+      body: { dob },
+    });
+
+    if (invokeError) {
+      throw invokeError;
+    }
+
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", session.id).single();
 
     if (error || !data) {
       throw error ?? new Error("Could not save your birthday.");
@@ -547,7 +555,7 @@ export const ukmApi = {
     return mapRemoteProfile(data);
   },
 
-  async saveProfile(session: SessionUser, values: { displayName: string; avatarUrl: string }) {
+  async saveProfile(session: SessionUser, values: { displayName: string; avatarUrl: string; dob?: string | null }) {
     if (!isSupabaseConfigured || !supabase) {
       return updateMockProfile(session.email, (profile) => ({
         ...profile,
@@ -556,17 +564,39 @@ export const ukmApi = {
       }));
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .upsert({
-        id: session.id,
-        email: session.email,
-        display_name: values.displayName || null,
-        avatar_url: values.avatarUrl || null,
-        updated_at: nowIso(),
-      })
-      .select("*")
-      .single();
+    if (values.dob) {
+      const { error: invokeError } = await supabase.functions.invoke("complete-onboarding", {
+        body: {
+          dob: values.dob,
+          displayName: values.displayName || null,
+          avatarUrl: values.avatarUrl || null,
+        },
+      });
+
+      if (invokeError) {
+        throw invokeError;
+      }
+    } else {
+      const { data, error } = await supabase
+        .from("profiles")
+        .upsert({
+          id: session.id,
+          email: session.email,
+          display_name: values.displayName || null,
+          avatar_url: values.avatarUrl || null,
+          updated_at: nowIso(),
+        })
+        .select("*")
+        .single();
+
+      if (error || !data) {
+        throw error ?? new Error("Could not save your profile.");
+      }
+
+      return mapRemoteProfile(data);
+    }
+
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", session.id).single();
 
     if (error || !data) {
       throw error ?? new Error("Could not save your profile.");
@@ -749,16 +779,39 @@ export const ukmApi = {
         return;
       }
 
-      db.blockedSenders.push({
-        userId: session.id,
-        senderIdentityId: message.senderIdentityId,
-        reason: "manual_block",
-      });
+      const existing = db.blockedSenders.find(
+        (item) => item.userId === session.id && item.senderIdentityId === message.senderIdentityId,
+      );
+
+      if (existing) {
+        existing.reason = "manual_block";
+        existing.createdAt = nowIso();
+      } else {
+        db.blockedSenders.push({
+          userId: session.id,
+          senderIdentityId: message.senderIdentityId,
+          reason: "manual_block",
+          createdAt: nowIso(),
+        });
+      }
       await saveMockDb(db);
       return;
     }
 
     await supabase.functions.invoke("block-sender", { body: { messageId } });
+  },
+
+  async unblockSender(session: SessionUser, senderIdentityId: string) {
+    if (!isSupabaseConfigured || !supabase) {
+      const db = await loadMockDb();
+      db.blockedSenders = db.blockedSenders.filter(
+        (item) => !(item.userId === session.id && item.senderIdentityId === senderIdentityId),
+      );
+      await saveMockDb(db);
+      return;
+    }
+
+    await supabase.functions.invoke("unblock-sender", { body: { senderIdentityId } });
   },
 
   async getPublicProfile(username: string) {
@@ -830,13 +883,19 @@ export const ukmApi = {
     });
   },
 
-  async trackShare(email: string, channel: LinkEvent["channel"], copyVariantKey: CopyVariantKey) {
+  async trackOwnerLinkEvent(
+    email: string,
+    eventType: LinkEvent["eventType"],
+    channel: LinkChannel,
+    copyVariantKey: CopyVariantKey | null,
+    metadata: LinkEvent["metadata"] = {},
+  ) {
     if (!isSupabaseConfigured || !supabase) {
       return trackMockLinkEvent(email, {
-        eventType: "share",
+        eventType,
         channel,
         copyVariantKey,
-        metadata: {},
+        metadata,
       });
     }
 
@@ -847,8 +906,12 @@ export const ukmApi = {
     }
 
     await supabase.functions.invoke("track-link-event", {
-      body: { eventType: "share", channel, copyVariantKey },
+      body: { eventType, channel, copyVariantKey, metadata },
     });
+  },
+
+  async trackShare(email: string, channel: LinkChannel, copyVariantKey: CopyVariantKey) {
+    return this.trackOwnerLinkEvent(email, "share", channel, copyVariantKey);
   },
 
   async recordInboxOpened(session: SessionUser) {
@@ -888,7 +951,12 @@ export const ukmApi = {
     });
   },
 
-  async trackPublicEvent(username: string, eventType: "view" | "open_app", copyVariantKey: CopyVariantKey | null = null) {
+  async trackPublicEvent(
+    username: string,
+    eventType: "view" | "open_app",
+    copyVariantKey: CopyVariantKey | null = null,
+    channel: LinkChannel = "unknown",
+  ) {
     if (!isSupabaseConfigured || !supabase) {
       const db = await loadMockDb();
       const profile = db.profiles.find((item) => item.username === username);
@@ -901,7 +969,7 @@ export const ukmApi = {
         id: Crypto.randomUUID(),
         userId: profile.id,
         eventType,
-        channel: eventType === "open_app" ? "app" : "unknown",
+        channel,
         copyVariantKey,
         createdAt: nowIso(),
         metadata: {},
@@ -911,7 +979,7 @@ export const ukmApi = {
     }
 
     await supabase.functions.invoke("track-public-event", {
-      body: { username, eventType, copyVariantKey },
+      body: { username, eventType, copyVariantKey, channel },
     });
   },
 };
@@ -966,6 +1034,14 @@ function mapRemoteFlags(row: Record<string, unknown> | null): AppFlags {
     curiosityHintsEnabled: Boolean(row.curiosity_hints_enabled),
     growthAutomationEnabled: Boolean(row.growth_automation_enabled),
     globalOptimizationEnabled: Boolean(row.global_optimization_enabled),
+  };
+}
+
+function mapRemoteBlockedSender(row: Record<string, unknown>): BlockedSenderRecord {
+  return {
+    senderIdentityId: String(row.sender_identity_id),
+    reason: String(row.reason ?? "manual_block"),
+    createdAt: String(row.created_at ?? nowIso()),
   };
 }
 

@@ -42,6 +42,7 @@ Apply the launch schema and functions from the `supabase/` directory to a Supaba
 - `seed-starter-items`
 - `submit-anonymous-message`
 - `block-sender`
+- `unblock-sender`
 - `report-message`
 - `track-link-event`
 - `track-public-event`
