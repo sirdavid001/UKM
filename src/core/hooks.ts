@@ -5,22 +5,30 @@ import { ukmApi } from "@/core/api";
 import { useAppStore } from "@/core/store";
 
 export function useBootstrapSession() {
-  const sessionUser = useAppStore((state) => state.sessionUser);
   const setSessionUser = useAppStore((state) => state.setSessionUser);
+  const setAuthReady = useAppStore((state) => state.setAuthReady);
   const hydrated = useAppStore((state) => state.hydrated);
+  const authReady = useAppStore((state) => state.authReady);
+  const backendMode = useAppStore((state) => state.backendMode);
 
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
-      if (!hydrated || sessionUser) {
+      if (!hydrated || authReady) {
+        return;
+      }
+
+      if (backendMode === "mock") {
+        setAuthReady(true);
         return;
       }
 
       const restored = await ukmApi.restoreSession();
 
-      if (!cancelled && restored) {
+      if (!cancelled) {
         setSessionUser(restored);
+        setAuthReady(true);
       }
     }
 
@@ -29,7 +37,7 @@ export function useBootstrapSession() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, sessionUser, setSessionUser]);
+  }, [authReady, backendMode, hydrated, setAuthReady, setSessionUser]);
 }
 
 export function useDashboard() {

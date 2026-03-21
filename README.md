@@ -48,6 +48,11 @@ Apply the launch schema and functions from the `supabase/` directory to a Supaba
 - `track-public-event`
 - `register-push-token`
 - `send-message-push`
+- `send-growth-nudges`
+
+Recommended schedules after deploy:
+
+- trigger `send-growth-nudges` hourly
 
 ## Current status
 
@@ -60,13 +65,13 @@ Implemented in this repo:
 - public submission page with sender session persistence
 - inbox ordering and detail actions
 - settings for theme and hidden words
-- push token registration scaffold and generic push batching hook
+- Expo push token registration, Android channel setup, and generic push batching
+- zero-message recovery nudge function
 - public profile view/open tracking for anonymous share funnel analytics
 - Supabase schema and launch Edge Functions
 
 Still expected before production:
 
-- real Expo push token registration and batching
 - direct Instagram Story asset sharing instead of generic share fallback
 - richer analytics dashboards
 - subscriptions and post-launch automation milestones

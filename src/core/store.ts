@@ -8,12 +8,14 @@ import type { AppFlags, SessionUser, ThemePreference } from "@/core/types";
 
 type StoreState = {
   hydrated: boolean;
+  authReady: boolean;
   backendMode: "mock" | "supabase";
   appFlags: AppFlags;
   themePreference: ThemePreference;
   pendingEmail: string | null;
   sessionUser: SessionUser | null;
   setHydrated: (hydrated: boolean) => void;
+  setAuthReady: (authReady: boolean) => void;
   setPendingEmail: (email: string | null) => void;
   setThemePreference: (preference: ThemePreference) => void;
   setSessionUser: (user: SessionUser | null) => void;
@@ -25,12 +27,14 @@ export const useAppStore = create<StoreState>()(
   persist(
     (set) => ({
       hydrated: false,
+      authReady: false,
       backendMode: isSupabaseConfigured ? "supabase" : "mock",
       appFlags: APP_FLAGS,
       themePreference: "system",
       pendingEmail: null,
       sessionUser: null,
       setHydrated: (hydrated) => set({ hydrated }),
+      setAuthReady: (authReady) => set({ authReady }),
       setPendingEmail: (pendingEmail) => set({ pendingEmail }),
       setThemePreference: (themePreference) => set({ themePreference }),
       setSessionUser: (sessionUser) => set({ sessionUser }),
@@ -47,6 +51,9 @@ export const useAppStore = create<StoreState>()(
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
+        if (state?.backendMode === "mock") {
+          state?.setAuthReady(true);
+        }
       },
     },
   ),

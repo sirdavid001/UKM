@@ -75,7 +75,8 @@ export type LinkEvent = {
     | "copy_link"
     | "open_app"
     | "inbox_open"
-    | "recovery_view";
+    | "recovery_view"
+    | "growth_nudge";
   channel: LinkChannel;
   copyVariantKey: CopyVariantKey | null;
   createdAt: string;

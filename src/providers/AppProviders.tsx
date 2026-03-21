@@ -8,7 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ukmApi } from "@/core/api";
-import { registerForPushNotificationsAsync } from "@/core/notifications";
+import { addExpoPushTokenRefreshListener, registerForPushNotificationsAsync } from "@/core/notifications";
 import { useAppStore } from "@/core/store";
 import { AppThemeProvider, useTheme } from "@/core/theme";
 
@@ -25,7 +25,7 @@ function NotificationBootstrap() {
   useEffect(() => {
     let cancelled = false;
 
-    async function register() {
+    async function syncToken() {
       if (!sessionUser) {
         return;
       }
@@ -38,10 +38,21 @@ function NotificationBootstrap() {
       await ukmApi.registerPushToken(sessionUser, result.token);
     }
 
-    void register();
+    void syncToken();
+
+    const subscription = sessionUser
+      ? addExpoPushTokenRefreshListener(async (token) => {
+          if (cancelled) {
+            return;
+          }
+
+          await ukmApi.registerPushToken(sessionUser, token);
+        })
+      : null;
 
     return () => {
       cancelled = true;
+      subscription?.remove();
     };
   }, [sessionUser]);
 

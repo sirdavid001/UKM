@@ -5,6 +5,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 const CACHE_KEY = "ukm.push-token.v1";
+export const PUSH_CHANNEL_ID = "messages";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -24,10 +25,26 @@ function getProjectId() {
   return extraProjectId ?? manifestProjectId ?? undefined;
 }
 
+async function ensureAndroidChannel() {
+  if (Platform.OS !== "android") {
+    return;
+  }
+
+  await Notifications.setNotificationChannelAsync(PUSH_CHANNEL_ID, {
+    name: "Messages",
+    importance: Notifications.AndroidImportance.HIGH,
+    showBadge: true,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#FF7448",
+  });
+}
+
 export async function registerForPushNotificationsAsync() {
   if (Platform.OS === "web" || !Device.isDevice) {
     return null;
   }
+
+  await ensureAndroidChannel();
 
   const existingPermission = await Notifications.getPermissionsAsync();
   let finalStatus = existingPermission.status;
@@ -53,4 +70,18 @@ export async function registerForPushNotificationsAsync() {
   await AsyncStorage.setItem(CACHE_KEY, token);
 
   return { token, changed: true };
+}
+
+export function addExpoPushTokenRefreshListener(onToken: (token: string) => void | Promise<void>) {
+  if (Platform.OS === "web") {
+    return { remove: () => {} };
+  }
+
+  return Notifications.addPushTokenListener(async () => {
+    const next = await registerForPushNotificationsAsync();
+
+    if (next?.token) {
+      await onToken(next.token);
+    }
+  });
 }

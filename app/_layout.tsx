@@ -1,22 +1,44 @@
 import "../global.css";
 
-import { Stack } from "expo-router";
+import { Stack, useSegments } from "expo-router";
+import { Text, View } from "react-native";
 
 import { useBootstrapSession } from "@/core/hooks";
+import { useAppStore } from "@/core/store";
 import { AppProviders } from "@/providers/AppProviders";
 
-export default function RootLayout() {
+function RootNavigator() {
   useBootstrapSession();
+  const hydrated = useAppStore((state) => state.hydrated);
+  const authReady = useAppStore((state) => state.authReady);
+  const segments = useSegments();
+  const isPublicRoute = segments[0] === "u";
+
+  if (!hydrated || (!authReady && !isPublicRoute)) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#08090d" }}>
+        <View style={{ borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#141825" }}>
+          <Text style={{ color: "#9ca7c2" }}>Loading UKM...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="u/[username]" />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <AppProviders>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="u/[username]" />
-      </Stack>
+      <RootNavigator />
     </AppProviders>
   );
 }

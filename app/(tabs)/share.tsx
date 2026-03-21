@@ -50,6 +50,7 @@ export default function ShareScreen() {
   const activePrompt = dashboard.prompts.find((prompt) => prompt.id === dashboard.profile.activePromptId) ?? PROMPT_TEMPLATES[0];
   const organicCount = dashboard.messages.filter((message) => !message.isSeeded && message.status === "visible").length;
   const shareCount = dashboard.linkEvents.filter((event) => event.eventType === "share").length;
+  const copyLinkCount = dashboard.linkEvents.filter((event) => event.eventType === "copy_link").length;
   const boostEndsAt = dashboard.profile.onboardingBoostExpiresAt ? new Date(dashboard.profile.onboardingBoostExpiresAt).getTime() : null;
   const boostHoursLeft = boostEndsAt ? Math.max(0, Math.ceil((boostEndsAt - Date.now()) / (60 * 60 * 1000))) : 0;
   const zeroMessageRecovery =
@@ -73,6 +74,28 @@ export default function ShareScreen() {
       })),
     [baseProfileUrl, copyVariant, shareCaption],
   );
+  const analytics = useMemo(() => {
+    const views = dashboard.linkEvents.filter((event) => event.eventType === "view");
+    const submits = dashboard.linkEvents.filter((event) => event.eventType === "submit");
+    const submitsByVariant = {
+      a: submits.filter((event) => event.copyVariantKey === "a").length,
+      b: submits.filter((event) => event.copyVariantKey === "b").length,
+    };
+    const submitChannels = submits.reduce<Record<string, number>>((accumulator, event) => {
+      accumulator[event.channel] = (accumulator[event.channel] ?? 0) + 1;
+      return accumulator;
+    }, {});
+    const bestChannel = Object.entries(submitChannels).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "none yet";
+    const conversion = views.length > 0 ? Math.round((submits.length / views.length) * 100) : null;
+
+    return {
+      viewCount: views.length,
+      submitCount: submits.length,
+      conversion,
+      submitsByVariant,
+      bestChannel,
+    };
+  }, [dashboard.linkEvents]);
 
   useEffect(() => {
     if (!zeroMessageRecovery || recoveryTracked.current) {
@@ -216,6 +239,66 @@ export default function ShareScreen() {
               </Text>
               <Text className="font-medium text-sm" style={{ color: palette.text }}>
                 {shareCount}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Copy links
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {copyLinkCount}
+              </Text>
+            </View>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle title="Funnel snapshot" hint="Basic launch analytics only. Use this to pick better copy, not to overfit tiny data." />
+            <View className="flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Public views
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {analytics.viewCount}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Anonymous submits
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {analytics.submitCount}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                View to submit
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {analytics.conversion === null ? "Waiting for data" : `${analytics.conversion}%`}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Copy A submits
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {analytics.submitsByVariant.a}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Copy B submits
+              </Text>
+              <Text className="font-medium text-sm" style={{ color: palette.text }}>
+                {analytics.submitsByVariant.b}
+              </Text>
+            </View>
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
+                Best source
+              </Text>
+              <Text className="font-medium text-sm capitalize" style={{ color: palette.text }}>
+                {analytics.bestChannel.replace(/_/g, " ")}
               </Text>
             </View>
           </SectionCard>
