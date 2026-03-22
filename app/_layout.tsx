@@ -13,8 +13,10 @@ function RootNavigator() {
   const authReady = useAppStore((state) => state.authReady);
   const segments = useSegments();
   const isPublicRoute = segments[0] === "u";
+  const isPreviewRoute = segments[0] === "figma";
+  const bypassBootstrapGate = isPublicRoute || isPreviewRoute;
 
-  if (!hydrated || (!authReady && !isPublicRoute)) {
+  if ((!hydrated || !authReady) && !bypassBootstrapGate) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#08090d" }}>
         <View style={{ borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#141825" }}>
@@ -27,10 +29,13 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(auth)/login" />
+      <Stack.Screen name="(onboarding)/age" />
+      <Stack.Screen name="(onboarding)/profile" />
+      <Stack.Screen name="(onboarding)/username" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="u/[username]" />
+      <Stack.Screen name="figma/[screen]" />
     </Stack>
   );
 }

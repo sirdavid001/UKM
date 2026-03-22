@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 
 import { getOrCreateSenderSession } from "@/core/sender-session";
 import { usePublicProfile } from "@/core/hooks";
@@ -136,19 +136,11 @@ export default function PublicProfileScreen() {
         <View className="mt-5 gap-5">
           <SectionCard>
             <View className="flex-row items-center">
-              {currentProfile.avatarUrl ? (
-                <Image
-                  source={{ uri: currentProfile.avatarUrl }}
-                  className="h-14 w-14 rounded-full"
-                  resizeMode="cover"
-                />
-              ) : (
-                <View className="h-14 w-14 items-center justify-center rounded-full" style={{ backgroundColor: palette.cardMuted }}>
-                  <Text className="font-display text-xl" style={{ color: palette.text }}>
-                    {(currentProfile.displayName ?? currentProfile.username).slice(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <View className="h-14 w-14 items-center justify-center rounded-full" style={{ backgroundColor: palette.cardMuted }}>
+                <Text className="font-display text-xl" style={{ color: palette.text }}>
+                  {(currentProfile.displayName ?? currentProfile.username).slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
               <View className="ml-4 flex-1">
                 <Text className="font-display text-2xl" style={{ color: palette.text }}>
                   {currentProfile.displayName ?? `@${currentProfile.username}`}

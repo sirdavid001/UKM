@@ -9,8 +9,7 @@ export const PUSH_CHANNEL_ID = "messages";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowAlert: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
   }),

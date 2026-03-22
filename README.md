@@ -29,7 +29,32 @@ cp .env.example .env
 npm start
 ```
 
+Useful app targets:
+
+```bash
+npm run ios
+npm run web
+```
+
+`npm run ios` is the default iOS path on this machine. It boots an iOS simulator, starts Expo on an open port, and opens the matching older Expo Go build directly with `simctl`.
+
+Native iOS tooling helpers:
+
+```bash
+npm run doctor
+npm run ios:native
+```
+
+`npm run doctor` runs Expo Doctor with the local portable Ruby / CocoaPods toolchain on `PATH`.
+
+`npm run ios:native` runs `expo run:ios` with that same toolchain. This project is pinned to Expo SDK 51 / React Native 0.74 so it stays compatible with Xcode 15.2.
+The first native run can spend several minutes inside CocoaPods while it downloads and caches pods.
+
 If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are missing, the app runs in local mock mode. Mock mode is intentional so the flow is immediately testable even before a Supabase project is wired.
+
+Physical iPhone note:
+
+Current App Store Expo Go targets the latest Expo SDK line, not SDK 51. For this repo, the supported dev path is iOS Simulator or a native development build, not Expo Go on a physical iPhone.
 
 ## Supabase
 
