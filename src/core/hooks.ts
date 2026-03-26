@@ -19,7 +19,8 @@ export function useBootstrapSession() {
         return;
       }
 
-      if (backendMode === "mock") {
+      if (backendMode === "misconfigured") {
+        setSessionUser(null);
         setAuthReady(true);
         return;
       }

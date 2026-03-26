@@ -14,7 +14,7 @@ export default function PublicProfileScreen() {
   const username = Array.isArray(params.username) ? params.username[0] : params.username;
   const rawVariant = Array.isArray(params.v) ? params.v[0] : params.v;
   const rawChannel = Array.isArray(params.ch) ? params.ch[0] : params.ch;
-  const { data: profile, isLoading } = usePublicProfile(username ?? "");
+  const { data: profile, error, isLoading } = usePublicProfile(username ?? "");
   const { palette } = useTheme();
   const [senderSessionId, setSenderSessionId] = useState<string | null>(null);
   const [senderConfidence, setSenderConfidence] = useState<"high" | "low">("high");
@@ -62,10 +62,10 @@ export default function PublicProfileScreen() {
       <Screen>
         <SectionCard>
           <Text className="font-display text-2xl" style={{ color: palette.text }}>
-            That prompt link is gone.
+            {error ? "UKM is not configured yet." : "That prompt link is gone."}
           </Text>
           <Text className="mt-2 font-body text-sm leading-6" style={{ color: palette.textMuted }}>
-            The username could not be found. Ask them for a fresh UKM link.
+            {error instanceof Error ? error.message : "The username could not be found. Ask them for a fresh UKM link."}
           </Text>
         </SectionCard>
       </Screen>

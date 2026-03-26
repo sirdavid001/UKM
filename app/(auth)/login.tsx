@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 
 import { ukmApi } from "@/core/api";
+import { getMissingPublicEnvMessage } from "@/core/env";
 import { useAppStore } from "@/core/store";
 import { useTheme } from "@/core/theme";
 import { AppTextInput, FieldLabel, GradientHero, PrimaryButton, Screen, SectionCard } from "@/ui/primitives";
@@ -16,9 +17,9 @@ export default function LoginScreen() {
   const { palette } = useTheme();
   const [email, setEmail] = useState(pendingEmail ?? "");
   const [code, setCode] = useState("");
-  const [demoCode, setDemoCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const configError = backendMode === "misconfigured" ? getMissingPublicEnvMessage() : null;
 
   if (sessionUser) {
     return <Redirect href="/" />;
@@ -28,9 +29,8 @@ export default function LoginScreen() {
     try {
       setBusy(true);
       setError(null);
-      const response = await ukmApi.requestOtp(email.trim().toLowerCase());
+      await ukmApi.requestOtp(email.trim().toLowerCase());
       setPendingEmail(email.trim().toLowerCase());
-      setDemoCode(response.mode === "mock" ? response.demoCode : null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not send the code.");
     } finally {
@@ -70,7 +70,7 @@ export default function LoginScreen() {
             Sign in
           </Text>
           <Text className="mt-2 font-body text-sm leading-6" style={{ color: palette.textMuted }}>
-            Use email OTP for launch. In mock mode, the code is fixed so you can move through the full product locally.
+            Use your live email OTP to sign in to UKM.
           </Text>
           {!pendingEmail ? (
             <View className="mt-5 gap-4">
@@ -78,7 +78,7 @@ export default function LoginScreen() {
                 <FieldLabel>Email</FieldLabel>
                 <AppTextInput autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} placeholder="you@example.com" value={email} />
               </View>
-              <PrimaryButton disabled={busy || !email.includes("@")} label={busy ? "Sending…" : "Send code"} onPress={requestCode} />
+              <PrimaryButton disabled={busy || !email.includes("@") || Boolean(configError)} label={busy ? "Sending…" : "Send code"} onPress={requestCode} />
             </View>
           ) : (
             <View className="mt-5 gap-4">
@@ -86,14 +86,7 @@ export default function LoginScreen() {
                 <FieldLabel>6-digit code</FieldLabel>
                 <AppTextInput keyboardType="number-pad" onChangeText={setCode} placeholder="000000" value={code} />
               </View>
-              {demoCode ? (
-                <View className="rounded-2xl px-4 py-3" style={{ backgroundColor: palette.cardMuted }}>
-                  <Text className="font-body text-sm" style={{ color: palette.text }}>
-                    Demo mode code: {demoCode}
-                  </Text>
-                </View>
-              ) : null}
-              <PrimaryButton disabled={busy || code.trim().length < 6} label={busy ? "Verifying…" : "Verify code"} onPress={verifyCode} />
+              <PrimaryButton disabled={busy || code.trim().length < 6 || Boolean(configError)} label={busy ? "Verifying…" : "Verify code"} onPress={verifyCode} />
               <PrimaryButton
                 label="Use a different email"
                 onPress={() => {
@@ -104,13 +97,18 @@ export default function LoginScreen() {
               />
             </View>
           )}
+          {configError ? (
+            <Text className="mt-4 font-body text-sm leading-6" style={{ color: palette.warning }}>
+              {configError}
+            </Text>
+          ) : null}
           {error ? (
             <Text className="mt-4 font-body text-sm" style={{ color: palette.danger }}>
               {error}
             </Text>
           ) : null}
           <Text className="mt-4 font-body text-xs uppercase tracking-[1.4px]" style={{ color: palette.textMuted }}>
-            Backend: {backendMode === "supabase" ? "Supabase live mode" : "Local mock mode"}
+            Backend: {backendMode === "supabase" ? "Supabase live mode" : "Configuration required"}
           </Text>
         </SectionCard>
       </View>

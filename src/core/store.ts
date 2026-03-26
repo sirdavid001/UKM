@@ -9,7 +9,7 @@ import type { AppFlags, SessionUser, ThemePreference } from "@/core/types";
 type StoreState = {
   hydrated: boolean;
   authReady: boolean;
-  backendMode: "mock" | "supabase";
+  backendMode: "misconfigured" | "supabase";
   appFlags: AppFlags;
   themePreference: ThemePreference;
   pendingEmail: string | null;
@@ -28,7 +28,7 @@ export const useAppStore = create<StoreState>()(
     (set) => ({
       hydrated: false,
       authReady: false,
-      backendMode: isSupabaseConfigured ? "supabase" : "mock",
+      backendMode: isSupabaseConfigured ? "supabase" : "misconfigured",
       appFlags: APP_FLAGS,
       themePreference: "system",
       pendingEmail: null,
@@ -51,9 +51,6 @@ export const useAppStore = create<StoreState>()(
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
-        if (state?.backendMode === "mock") {
-          state?.setAuthReady(true);
-        }
       },
     },
   ),

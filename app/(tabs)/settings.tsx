@@ -140,7 +140,7 @@ export default function SettingsScreen() {
           <SectionCard>
             <SectionTitle title="Launch diagnostics" hint="Useful while the product is still proving the core loop." />
             <Text className="font-body text-sm" style={{ color: palette.textMuted }}>
-              Backend mode: {backendMode}
+              Backend mode: {backendMode === "supabase" ? "Supabase live" : "Configuration required"}
             </Text>
             <Text className="mt-2 font-body text-sm" style={{ color: palette.textMuted }}>
               Launch mode: {dashboard.flags.launchMode ? "enabled" : "disabled"}

@@ -50,7 +50,7 @@ npm run ios:native
 `npm run ios:native` runs `expo run:ios` with that same toolchain. This project is pinned to Expo SDK 51 / React Native 0.74 so it stays compatible with Xcode 15.2.
 The first native run can spend several minutes inside CocoaPods while it downloads and caches pods.
 
-If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are missing, the app runs in local mock mode. Mock mode is intentional so the flow is immediately testable even before a Supabase project is wired.
+`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_APP_URL` are required. The app is now live-only and will block auth plus public submissions until those values point at the real project.
 
 Physical iPhone note:
 
@@ -84,7 +84,7 @@ Recommended schedules after deploy:
 Implemented in this repo:
 
 - launch-mode app shell and route structure
-- OTP auth UI with mock fallback
+- OTP auth UI wired for live Supabase
 - onboarding flow
 - share tab with prompt selection and share confirmation modal
 - public submission page with sender session persistence

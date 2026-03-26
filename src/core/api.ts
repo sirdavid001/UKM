@@ -1,8 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Crypto from "expo-crypto";
-
-import { APP_FLAGS, PROMPT_TEMPLATES, STARTER_MESSAGES } from "@/core/config";
-import { isSupabaseConfigured } from "@/core/env";
+import { APP_FLAGS, PROMPT_TEMPLATES } from "@/core/config";
+import { getMissingPublicEnvMessage, isSupabaseConfigured } from "@/core/env";
 import { supabase } from "@/core/supabase";
 import type {
   AppFlags,
@@ -14,47 +11,14 @@ import type {
   Message,
   Profile,
   PublicProfile,
-  ReportRecord,
-  SenderIdentity,
   SessionUser,
   SubmitMessageInput,
   SubmitMessageResult,
   ThemePreference,
 } from "@/core/types";
 
-const MOCK_DB_KEY = "ukm.mock-db.v1";
-const DEMO_OTP = "000000";
-const PROFANITY = ["hate", "stupid", "idiot", "die", "ugly", "bitch"];
-
-type MockDb = {
-  profiles: Profile[];
-  messages: Message[];
-  hiddenWords: { userId: string; word: string }[];
-  blockedSenders: { userId: string; senderIdentityId: string; reason: string; createdAt: string }[];
-  reports: ReportRecord[];
-  linkEvents: LinkEvent[];
-  senderIdentities: SenderIdentity[];
-  submissionEvents: {
-    recipientId: string;
-    promptId: string;
-    senderIdentityId: string | null;
-    outcome: "visible" | "filtered" | "flagged" | "retry" | "blocked";
-    source: "web" | "app";
-    abuseScore: number;
-    captchaRequired: boolean;
-    copyVariantKey: CopyVariantKey | null;
-    createdAt: string;
-  }[];
-  pushTokens: { userId: string; token: string; platform: string; updatedAt: string }[];
-  appFlags: AppFlags;
-};
-
 function nowIso() {
   return new Date().toISOString();
-}
-
-function hoursFromNow(hours: number) {
-  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
 function normalizeUsername(username: string) {
@@ -65,99 +29,8 @@ function normalizeWord(word: string) {
   return word.trim().toLowerCase();
 }
 
-function demoHash(input: string) {
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input);
-}
-
-async function loadMockDb(): Promise<MockDb> {
-  const raw = await AsyncStorage.getItem(MOCK_DB_KEY);
-
-  if (!raw) {
-    const seeded: MockDb = {
-      profiles: [],
-      messages: [],
-      hiddenWords: [],
-      blockedSenders: [],
-      reports: [],
-      linkEvents: [],
-      senderIdentities: [],
-      submissionEvents: [],
-      pushTokens: [],
-      appFlags: APP_FLAGS,
-    };
-    await AsyncStorage.setItem(MOCK_DB_KEY, JSON.stringify(seeded));
-    return seeded;
-  }
-
-  const parsed = JSON.parse(raw) as Partial<MockDb>;
-
-  return {
-    profiles: parsed.profiles ?? [],
-    messages: parsed.messages ?? [],
-    hiddenWords: parsed.hiddenWords ?? [],
-    blockedSenders: parsed.blockedSenders ?? [],
-    reports: parsed.reports ?? [],
-    linkEvents: parsed.linkEvents ?? [],
-    senderIdentities: parsed.senderIdentities ?? [],
-    submissionEvents: parsed.submissionEvents ?? [],
-    pushTokens: parsed.pushTokens ?? [],
-    appFlags: parsed.appFlags ?? APP_FLAGS,
-  };
-}
-
-async function saveMockDb(db: MockDb) {
-  await AsyncStorage.setItem(MOCK_DB_KEY, JSON.stringify(db));
-}
-
-async function waitForSuspiciousDelay() {
-  const jitterMs = 1000 + Math.floor(Math.random() * 2000);
-  await new Promise((resolve) => setTimeout(resolve, jitterMs));
-}
-
-function defaultProfile(email: string): Profile {
-  const timestamp = nowIso();
-
-  return {
-    id: Crypto.randomUUID(),
-    email,
-    username: null,
-    displayName: null,
-    avatarUrl: null,
-    themePreference: "system",
-    dob: null,
-    onboardingComplete: false,
-    activePromptId: PROMPT_TEMPLATES[0].id,
-    onboardingBoostExpiresAt: null,
-    lastInboxOpenedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-async function ensureMockProfile(email: string) {
-  const db = await loadMockDb();
-  const existing = db.profiles.find((profile) => profile.email === email);
-
-  if (existing) {
-    return existing;
-  }
-
-  const profile = defaultProfile(email);
-  db.profiles.push(profile);
-  await saveMockDb(db);
-  return profile;
-}
-
 function messageIsUnread(message: Message) {
   return !message.readAt && message.status === "visible";
-}
-
-function messageIsArchived(message: Message) {
-  return message.status === "archived";
-}
-
-function messageIsFiltered(message: Message) {
-  return message.status === "filtered" || message.status === "flagged";
 }
 
 function sortInbox(messages: Message[]) {
@@ -173,276 +46,19 @@ function sortInbox(messages: Message[]) {
   });
 }
 
-async function seedStarterMessages(recipientId: string) {
-  const db = await loadMockDb();
-  const existing = db.messages.filter((message) => message.recipientId === recipientId && message.isSeeded);
-
-  if (existing.length > 0) {
-    return;
+function requireSupabaseClient() {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error(getMissingPublicEnvMessage());
   }
 
-  for (const content of STARTER_MESSAGES) {
-    db.messages.push({
-      id: Crypto.randomUUID(),
-      recipientId,
-      promptId: PROMPT_TEMPLATES[0].id,
-      senderIdentityId: null,
-      content,
-      status: "visible",
-      moderationScore: 0,
-      abuseScore: 0,
-      isSeeded: true,
-      source: "app",
-      readAt: null,
-      createdAt: nowIso(),
-    });
-  }
-
-  await saveMockDb(db);
-}
-
-function organicMessages(messages: Message[]) {
-  return messages.filter((message) => !message.isSeeded && message.status === "visible");
-}
-
-function recentOrganicMessages(messages: Message[]) {
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  return organicMessages(messages).filter((message) => new Date(message.createdAt).getTime() >= weekAgo);
-}
-
-async function getPublicProfileFromMock(username: string): Promise<PublicProfile | null> {
-  const db = await loadMockDb();
-  const profile = db.profiles.find((item) => item.username === username);
-
-  if (!profile) {
-    return null;
-  }
-
-  const prompt = PROMPT_TEMPLATES.find((item) => item.id === profile.activePromptId) ?? PROMPT_TEMPLATES[0];
-  const profileMessages = db.messages.filter((message) => message.recipientId === profile.id);
-
-  return {
-    id: profile.id,
-    username,
-    displayName: profile.displayName,
-    avatarUrl: profile.avatarUrl,
-    activePrompt: prompt,
-    organicSubmissions7d: recentOrganicMessages(profileMessages).length,
-  };
-}
-
-async function upsertMockSenderIdentity({
-  recipientId,
-  senderSessionId,
-  senderConfidence,
-}: {
-  recipientId: string;
-  senderSessionId: string;
-  senderConfidence: "high" | "low";
-}) {
-  const db = await loadMockDb();
-  const sessionHash = await demoHash(`${recipientId}:${senderSessionId}`);
-  const networkHash = await demoHash(`${recipientId}:demo-network`);
-  const behaviorHash = await demoHash(`${recipientId}:${senderSessionId}:behavior`);
-  let identity = db.senderIdentities.find((item) => item.recipientId === recipientId && item.sessionFingerprintHash === sessionHash);
-
-  if (!identity) {
-    identity = {
-      id: Crypto.randomUUID(),
-      recipientId,
-      sessionFingerprintHash: sessionHash,
-      networkFingerprintHash: networkHash,
-      behaviorSignatureHash: behaviorHash,
-      fingerprintConfidenceScore: senderConfidence === "high" ? 1 : 0.55,
-      abuseScore: 0,
-      abuseScoreLastUpdatedAt: nowIso(),
-      shadowLimitedUntil: null,
-      createdAt: nowIso(),
-    };
-    db.senderIdentities.push(identity);
-    await saveMockDb(db);
-  }
-
-  return identity;
-}
-
-async function submitMockMessage(input: SubmitMessageInput): Promise<SubmitMessageResult> {
-  const db = await loadMockDb();
-  const publicProfile = db.profiles.find((profile) => profile.username === input.username);
-
-  if (!publicProfile) {
-    return { accepted: false, canSendAnother: false, message: "That profile does not exist anymore." };
-  }
-
-  const identity = await upsertMockSenderIdentity({
-    recipientId: publicProfile.id,
-    senderSessionId: input.senderSessionId,
-    senderConfidence: input.senderConfidence,
-  });
-
-  const submissionsThisHour = db.messages.filter(
-    (message) =>
-      message.senderIdentityId === identity.id &&
-      new Date(message.createdAt).getTime() >= Date.now() - 60 * 60 * 1000 &&
-      !message.isSeeded,
-  );
-  const sameNetworkIdentityIds = new Set(
-    db.senderIdentities
-      .filter((item) => item.recipientId === publicProfile.id && item.networkFingerprintHash === identity.networkFingerprintHash)
-      .map((item) => item.id),
-  );
-  const networkSubmissionsThisHour = db.messages.filter(
-    (message) =>
-      message.recipientId === publicProfile.id &&
-      Boolean(message.senderIdentityId && sameNetworkIdentityIds.has(message.senderIdentityId)) &&
-      new Date(message.createdAt).getTime() >= Date.now() - 60 * 60 * 1000 &&
-      !message.isSeeded,
-  );
-  const boostActive = publicProfile.onboardingBoostExpiresAt
-    ? new Date(publicProfile.onboardingBoostExpiresAt).getTime() > Date.now()
-    : false;
-  const sessionCap = boostActive ? 3 : 2;
-  const networkCap = boostActive ? 12 : 8;
-  const isBlocked = db.blockedSenders.some((item) => item.userId === publicProfile.id && item.senderIdentityId === identity.id);
-
-  if (isBlocked) {
-    await waitForSuspiciousDelay();
-    db.submissionEvents.push({
-      recipientId: publicProfile.id,
-      promptId: input.promptId,
-      senderIdentityId: identity.id,
-      outcome: "blocked",
-      source: "web",
-      abuseScore: 0.92,
-      captchaRequired: false,
-      copyVariantKey: input.copyVariantKey,
-      createdAt: nowIso(),
-    });
-    await saveMockDb(db);
-    return { accepted: false, canSendAnother: false, message: "Try again in a moment." };
-  }
-
-  if (submissionsThisHour.length >= sessionCap || networkSubmissionsThisHour.length >= networkCap) {
-    await waitForSuspiciousDelay();
-    db.submissionEvents.push({
-      recipientId: publicProfile.id,
-      promptId: input.promptId,
-      senderIdentityId: identity.id,
-      outcome: "retry",
-      source: "web",
-      abuseScore: 0.66,
-      captchaRequired: false,
-      copyVariantKey: input.copyVariantKey,
-      createdAt: nowIso(),
-    });
-    await saveMockDb(db);
-    return { accepted: false, canSendAnother: false, message: "Try again in a moment." };
-  }
-
-  const hiddenWords = db.hiddenWords.filter((item) => item.userId === publicProfile.id).map((item) => item.word);
-  const normalized = input.content.trim().toLowerCase();
-  const hasProfanity = PROFANITY.some((word) => normalized.includes(word));
-  const hasHiddenWord = hiddenWords.some((word) => normalized.includes(word));
-  const status: Message["status"] = hasProfanity || hasHiddenWord ? "filtered" : "visible";
-
-  db.messages.push({
-    id: Crypto.randomUUID(),
-    recipientId: publicProfile.id,
-    promptId: input.promptId,
-    senderIdentityId: identity.id,
-    content: input.content.trim(),
-    status,
-    moderationScore: hasProfanity || hasHiddenWord ? 0.84 : 0.1,
-    abuseScore: submissionsThisHour.length >= sessionCap - 1 ? 0.6 : 0.2,
-    isSeeded: false,
-    source: "web",
-    readAt: null,
-    createdAt: nowIso(),
-  });
-  db.linkEvents.push({
-    id: Crypto.randomUUID(),
-    userId: publicProfile.id,
-    eventType: "submit",
-    channel: input.channel ?? "unknown",
-    copyVariantKey: input.copyVariantKey,
-    createdAt: nowIso(),
-    metadata: {},
-  });
-  db.submissionEvents.push({
-    recipientId: publicProfile.id,
-    promptId: input.promptId,
-    senderIdentityId: identity.id,
-    outcome: status,
-    source: "web",
-    abuseScore: status === "visible" ? 0.2 : 0.62,
-    captchaRequired: false,
-    copyVariantKey: input.copyVariantKey,
-    createdAt: nowIso(),
-  });
-  await saveMockDb(db);
-
-  return { accepted: true, canSendAnother: true };
-}
-
-async function buildMockDashboard(email: string): Promise<DashboardSnapshot> {
-  const db = await loadMockDb();
-  const profile = db.profiles.find((item) => item.email === email) ?? (await ensureMockProfile(email));
-  const messages = db.messages.filter((item) => item.recipientId === profile.id);
-
-  return {
-    profile,
-    prompts: PROMPT_TEMPLATES,
-    messages: sortInbox(messages),
-    hiddenWords: db.hiddenWords.filter((item) => item.userId === profile.id).map((item) => item.word),
-    blockedSenders: db.blockedSenders
-      .filter((item) => item.userId === profile.id)
-      .map((item) => ({ senderIdentityId: item.senderIdentityId, reason: item.reason, createdAt: item.createdAt })),
-    linkEvents: db.linkEvents.filter((item) => item.userId === profile.id),
-    flags: db.appFlags,
-  };
-}
-
-async function updateMockProfile(email: string, updater: (profile: Profile) => Profile) {
-  const db = await loadMockDb();
-  const index = db.profiles.findIndex((item) => item.email === email);
-  const profile = index >= 0 ? db.profiles[index] : defaultProfile(email);
-  const next = updater({ ...profile, updatedAt: nowIso() });
-
-  if (index >= 0) {
-    db.profiles[index] = next;
-  } else {
-    db.profiles.push(next);
-  }
-
-  await saveMockDb(db);
-  return next;
-}
-
-async function trackMockLinkEvent(email: string, event: Omit<LinkEvent, "id" | "userId" | "createdAt">) {
-  const db = await loadMockDb();
-  const profile = db.profiles.find((item) => item.email === email);
-
-  if (!profile) {
-    return;
-  }
-
-  db.linkEvents.push({
-    id: Crypto.randomUUID(),
-    userId: profile.id,
-    createdAt: nowIso(),
-    ...event,
-  });
-  await saveMockDb(db);
+  return supabase;
 }
 
 export const ukmApi = {
   async requestOtp(email: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      await ensureMockProfile(email);
-      return { mode: "mock" as const, demoCode: DEMO_OTP };
-    }
+    const client = requireSupabaseClient();
 
-    await supabase.auth.signInWithOtp({
+    await client.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: true },
     });
@@ -451,16 +67,9 @@ export const ukmApi = {
   },
 
   async verifyOtp(email: string, code: string): Promise<SessionUser> {
-    if (!isSupabaseConfigured || !supabase) {
-      if (code !== DEMO_OTP) {
-        throw new Error(`Use ${DEMO_OTP} in local mock mode.`);
-      }
+    const client = requireSupabaseClient();
 
-      const profile = await ensureMockProfile(email);
-      return { id: profile.id, email: profile.email };
-    }
-
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { data, error } = await client.auth.verifyOtp({
       email,
       token: code,
       type: "email",
@@ -495,24 +104,21 @@ export const ukmApi = {
   },
 
   async getDashboard(session: SessionUser): Promise<DashboardSnapshot> {
-    if (!isSupabaseConfigured || !supabase) {
-      return buildMockDashboard(session.email);
-    }
+    const client = requireSupabaseClient();
 
     const [{ data: profile }, { data: templates }, { data: flags }, { data: messages }, { data: hiddenWords }, { data: blocks }, { data: linkEvents }] =
       await Promise.all([
-        supabase.from("profiles").select("*").eq("id", session.id).single(),
-        supabase.from("prompt_templates").select("*").eq("is_active", true).order("base_rank", { ascending: false }),
-        supabase.from("app_flags").select("*").limit(1).single(),
-        supabase.from("messages").select("*").eq("recipient_id", session.id).order("created_at", { ascending: false }),
-        supabase.from("hidden_words").select("word").eq("user_id", session.id),
-        supabase.from("blocked_senders").select("sender_identity_id, reason, created_at").eq("user_id", session.id),
-        supabase.from("link_events").select("*").eq("user_id", session.id).order("created_at", { ascending: false }),
+        client.from("profiles").select("*").eq("id", session.id).single(),
+        client.from("prompt_templates").select("*").eq("is_active", true).order("base_rank", { ascending: false }),
+        client.from("app_flags").select("*").limit(1).single(),
+        client.from("messages").select("*").eq("recipient_id", session.id).order("created_at", { ascending: false }),
+        client.from("hidden_words").select("word").eq("user_id", session.id),
+        client.from("blocked_senders").select("sender_identity_id, reason, created_at").eq("user_id", session.id),
+        client.from("link_events").select("*").eq("user_id", session.id).order("created_at", { ascending: false }),
       ]);
 
     if (!profile) {
-      const mockProfile = await ensureMockProfile(session.email);
-      return buildMockDashboard(mockProfile.email);
+      throw new Error("The live profile row is missing for this account.");
     }
 
     return {
@@ -527,6 +133,7 @@ export const ukmApi = {
   },
 
   async saveAgeGate(session: SessionUser, dob: string) {
+    const client = requireSupabaseClient();
     const birthDate = new Date(dob);
     const age = (Date.now() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
@@ -534,11 +141,7 @@ export const ukmApi = {
       throw new Error("You need to be 18 or older to use UKM.");
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      return updateMockProfile(session.email, (profile) => ({ ...profile, dob }));
-    }
-
-    const { error: invokeError } = await supabase.functions.invoke("complete-onboarding", {
+    const { error: invokeError } = await client.functions.invoke("complete-onboarding", {
       body: { dob },
     });
 
@@ -546,7 +149,7 @@ export const ukmApi = {
       throw invokeError;
     }
 
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", session.id).single();
+    const { data, error } = await client.from("profiles").select("*").eq("id", session.id).single();
 
     if (error || !data) {
       throw error ?? new Error("Could not save your birthday.");
@@ -556,16 +159,10 @@ export const ukmApi = {
   },
 
   async saveProfile(session: SessionUser, values: { displayName: string; avatarUrl: string; dob?: string | null }) {
-    if (!isSupabaseConfigured || !supabase) {
-      return updateMockProfile(session.email, (profile) => ({
-        ...profile,
-        displayName: values.displayName || null,
-        avatarUrl: values.avatarUrl || null,
-      }));
-    }
+    const client = requireSupabaseClient();
 
     if (values.dob) {
-      const { error: invokeError } = await supabase.functions.invoke("complete-onboarding", {
+      const { error: invokeError } = await client.functions.invoke("complete-onboarding", {
         body: {
           dob: values.dob,
           displayName: values.displayName || null,
@@ -577,7 +174,7 @@ export const ukmApi = {
         throw invokeError;
       }
     } else {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("profiles")
         .upsert({
           id: session.id,
@@ -596,7 +193,7 @@ export const ukmApi = {
       return mapRemoteProfile(data);
     }
 
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", session.id).single();
+    const { data, error } = await client.from("profiles").select("*").eq("id", session.id).single();
 
     if (error || !data) {
       throw error ?? new Error("Could not save your profile.");
@@ -606,31 +203,14 @@ export const ukmApi = {
   },
 
   async claimUsername(session: SessionUser, desiredUsername: string) {
+    const client = requireSupabaseClient();
     const username = normalizeUsername(desiredUsername);
 
     if (!username || username.length < 3) {
       throw new Error("Usernames need at least 3 characters.");
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const taken = db.profiles.some((profile) => profile.username === username && profile.email !== session.email);
-
-      if (taken) {
-        throw new Error("That username is already taken.");
-      }
-
-      const next = await updateMockProfile(session.email, (profile) => ({
-        ...profile,
-        username,
-        onboardingComplete: true,
-        onboardingBoostExpiresAt: hoursFromNow(24),
-      }));
-      await seedStarterMessages(next.id);
-      return next;
-    }
-
-    const { data, error } = await supabase.functions.invoke("claim-username", {
+    const { data, error } = await client.functions.invoke("claim-username", {
       body: { desiredUsername: username },
     });
 
@@ -644,11 +224,9 @@ export const ukmApi = {
   },
 
   async setThemePreference(session: SessionUser, themePreference: ThemePreference) {
-    if (!isSupabaseConfigured || !supabase) {
-      return updateMockProfile(session.email, (profile) => ({ ...profile, themePreference }));
-    }
+    const client = requireSupabaseClient();
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("profiles")
       .update({ theme_preference: themePreference, updated_at: nowIso() })
       .eq("id", session.id)
@@ -663,11 +241,9 @@ export const ukmApi = {
   },
 
   async setActivePrompt(session: SessionUser, promptId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      return updateMockProfile(session.email, (profile) => ({ ...profile, activePromptId: promptId }));
-    }
+    const client = requireSupabaseClient();
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("profiles")
       .update({ active_prompt_id: promptId, updated_at: nowIso() })
       .eq("id", session.id)
@@ -682,144 +258,57 @@ export const ukmApi = {
   },
 
   async addHiddenWord(session: SessionUser, word: string) {
+    const client = requireSupabaseClient();
     const normalized = normalizeWord(word);
 
     if (!normalized) {
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const exists = db.hiddenWords.some((item) => item.userId === session.id && item.word === normalized);
-
-      if (!exists) {
-        db.hiddenWords.push({ userId: session.id, word: normalized });
-        await saveMockDb(db);
-      }
-
-      return;
-    }
-
-    await supabase.from("hidden_words").insert({ user_id: session.id, word: normalized });
+    await client.from("hidden_words").insert({ user_id: session.id, word: normalized });
   },
 
   async removeHiddenWord(session: SessionUser, word: string) {
+    const client = requireSupabaseClient();
     const normalized = normalizeWord(word);
 
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.hiddenWords = db.hiddenWords.filter((item) => !(item.userId === session.id && item.word === normalized));
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.from("hidden_words").delete().eq("user_id", session.id).eq("word", normalized);
+    await client.from("hidden_words").delete().eq("user_id", session.id).eq("word", normalized);
   },
 
   async markRead(session: SessionUser, messageId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.messages = db.messages.map((message) =>
-        message.id === messageId && message.recipientId === session.id ? { ...message, readAt: nowIso() } : message,
-      );
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.from("messages").update({ read_at: nowIso() }).eq("id", messageId).eq("recipient_id", session.id);
+    const client = requireSupabaseClient();
+    await client.from("messages").update({ read_at: nowIso() }).eq("id", messageId).eq("recipient_id", session.id);
   },
 
   async archiveMessage(session: SessionUser, messageId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.messages = db.messages.map((message) =>
-        message.id === messageId && message.recipientId === session.id ? { ...message, status: "archived", readAt: message.readAt ?? nowIso() } : message,
-      );
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.from("messages").update({ status: "archived", read_at: nowIso() }).eq("id", messageId).eq("recipient_id", session.id);
+    const client = requireSupabaseClient();
+    await client.from("messages").update({ status: "archived", read_at: nowIso() }).eq("id", messageId).eq("recipient_id", session.id);
   },
 
   async deleteMessage(session: SessionUser, messageId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.messages = db.messages.filter((message) => !(message.id === messageId && message.recipientId === session.id));
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.from("messages").delete().eq("id", messageId).eq("recipient_id", session.id);
+    const client = requireSupabaseClient();
+    await client.from("messages").delete().eq("id", messageId).eq("recipient_id", session.id);
   },
 
   async reportMessage(session: SessionUser, messageId: string, reason: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.reports.push({
-        id: Crypto.randomUUID(),
-        messageId,
-        reporterId: session.id,
-        reason,
-        createdAt: nowIso(),
-      });
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.functions.invoke("report-message", { body: { messageId, reason } });
+    const client = requireSupabaseClient();
+    await client.functions.invoke("report-message", { body: { messageId, reason } });
   },
 
   async blockSender(session: SessionUser, messageId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const message = db.messages.find((item) => item.id === messageId && item.recipientId === session.id);
-
-      if (!message?.senderIdentityId) {
-        return;
-      }
-
-      const existing = db.blockedSenders.find(
-        (item) => item.userId === session.id && item.senderIdentityId === message.senderIdentityId,
-      );
-
-      if (existing) {
-        existing.reason = "manual_block";
-        existing.createdAt = nowIso();
-      } else {
-        db.blockedSenders.push({
-          userId: session.id,
-          senderIdentityId: message.senderIdentityId,
-          reason: "manual_block",
-          createdAt: nowIso(),
-        });
-      }
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.functions.invoke("block-sender", { body: { messageId } });
+    const client = requireSupabaseClient();
+    await client.functions.invoke("block-sender", { body: { messageId } });
   },
 
   async unblockSender(session: SessionUser, senderIdentityId: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      db.blockedSenders = db.blockedSenders.filter(
-        (item) => !(item.userId === session.id && item.senderIdentityId === senderIdentityId),
-      );
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.functions.invoke("unblock-sender", { body: { senderIdentityId } });
+    const client = requireSupabaseClient();
+    await client.functions.invoke("unblock-sender", { body: { senderIdentityId } });
   },
 
   async getPublicProfile(username: string) {
-    if (!isSupabaseConfigured || !supabase) {
-      return getPublicProfileFromMock(username);
-    }
+    const client = requireSupabaseClient();
 
-    const { data, error } = await supabase.rpc("get_public_profile", { target_username: username });
+    const { data, error } = await client.rpc("get_public_profile", { target_username: username });
 
     if (error || !data?.length) {
       return null;
@@ -839,11 +328,9 @@ export const ukmApi = {
   },
 
   async submitAnonymousMessage(input: SubmitMessageInput) {
-    if (!isSupabaseConfigured || !supabase) {
-      return submitMockMessage(input);
-    }
+    const client = requireSupabaseClient();
 
-    const { data, error } = await supabase.functions.invoke("submit-anonymous-message", {
+    const { data, error } = await client.functions.invoke("submit-anonymous-message", {
       body: input,
     });
 
@@ -859,26 +346,9 @@ export const ukmApi = {
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const existing = db.pushTokens.find((item) => item.userId === session.id && item.token === token);
+    const client = requireSupabaseClient();
 
-      if (existing) {
-        existing.updatedAt = nowIso();
-      } else {
-        db.pushTokens.push({
-          userId: session.id,
-          token,
-          platform: "expo",
-          updatedAt: nowIso(),
-        });
-      }
-
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.functions.invoke("register-push-token", {
+    await client.functions.invoke("register-push-token", {
       body: { token, platform: "expo" },
     });
   },
@@ -890,22 +360,14 @@ export const ukmApi = {
     copyVariantKey: CopyVariantKey | null,
     metadata: LinkEvent["metadata"] = {},
   ) {
-    if (!isSupabaseConfigured || !supabase) {
-      return trackMockLinkEvent(email, {
-        eventType,
-        channel,
-        copyVariantKey,
-        metadata,
-      });
-    }
-
-    const { data: session } = await supabase.auth.getSession();
+    const client = requireSupabaseClient();
+    const { data: session } = await client.auth.getSession();
 
     if (!session.session?.user) {
       return;
     }
 
-    await supabase.functions.invoke("track-link-event", {
+    await client.functions.invoke("track-link-event", {
       body: { eventType, channel, copyVariantKey, metadata },
     });
   },
@@ -915,33 +377,9 @@ export const ukmApi = {
   },
 
   async recordInboxOpened(session: SessionUser) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const index = db.profiles.findIndex((item) => item.id === session.id || item.email === session.email);
-
-      if (index >= 0) {
-        db.profiles[index] = {
-          ...db.profiles[index],
-          lastInboxOpenedAt: nowIso(),
-          updatedAt: nowIso(),
-        };
-        db.linkEvents.push({
-          id: Crypto.randomUUID(),
-          userId: db.profiles[index].id,
-          eventType: "inbox_open",
-          channel: "app",
-          copyVariantKey: null,
-          createdAt: nowIso(),
-          metadata: {},
-        });
-        await saveMockDb(db);
-      }
-
-      return;
-    }
-
-    await supabase.from("profiles").update({ last_inbox_opened_at: nowIso(), updated_at: nowIso() }).eq("id", session.id);
-    await supabase.functions.invoke("track-link-event", {
+    const client = requireSupabaseClient();
+    await client.from("profiles").update({ last_inbox_opened_at: nowIso(), updated_at: nowIso() }).eq("id", session.id);
+    await client.functions.invoke("track-link-event", {
       body: {
         eventType: "inbox_open",
         channel: "app",
@@ -957,28 +395,8 @@ export const ukmApi = {
     copyVariantKey: CopyVariantKey | null = null,
     channel: LinkChannel = "unknown",
   ) {
-    if (!isSupabaseConfigured || !supabase) {
-      const db = await loadMockDb();
-      const profile = db.profiles.find((item) => item.username === username);
-
-      if (!profile) {
-        return;
-      }
-
-      db.linkEvents.push({
-        id: Crypto.randomUUID(),
-        userId: profile.id,
-        eventType,
-        channel,
-        copyVariantKey,
-        createdAt: nowIso(),
-        metadata: {},
-      });
-      await saveMockDb(db);
-      return;
-    }
-
-    await supabase.functions.invoke("track-public-event", {
+    const client = requireSupabaseClient();
+    await client.functions.invoke("track-public-event", {
       body: { username, eventType, copyVariantKey, channel },
     });
   },
