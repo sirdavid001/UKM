@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UKM Frontend Board</title>
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    <style>
+      :root {
+        --bg: #08090d;
+        --bg-soft: #10141d;
+        --surface: #121621;
+        --surface-soft: #1a2030;
+        --surface-ink: #eff2ff;
+        --muted: #a7b0c5;
+        --line: #242b3d;
+        --accent: #ff7448;
+        --accent-alt: #4da2ff;
+        --good: #61f0bb;
+        --warn: #f6b653;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", "Helvetica Neue", sans-serif;
+        color: var(--surface-ink);
+        background:
+          radial-gradient(circle at top left, rgba(255, 116, 72, 0.2), transparent 25%),
+          radial-gradient(circle at top right, rgba(77, 162, 255, 0.16), transparent 28%),
+          linear-gradient(180deg, #0b0d13 0%, #08090d 100%);
+      }
+
+      .board {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 48px 28px 72px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 18px;
+        padding: 28px 32px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 32px;
+        background:
+          linear-gradient(135deg, rgba(255, 116, 72, 0.18), rgba(77, 162, 255, 0.14)),
+          rgba(14, 18, 27, 0.88);
+        backdrop-filter: blur(20px);
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(239, 242, 255, 0.72);
+      }
+
+      .hero h1 {
+        margin: 0;
+        max-width: 720px;
+        font-size: 44px;
+        line-height: 1;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(320px, 1fr));
+        gap: 28px;
+        margin-top: 32px;
+      }
+
+      .frame-wrap {
+        display: grid;
+        gap: 12px;
+      }
+
+      .frame-label {
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .phone {
+        position: relative;
+        overflow: hidden;
+        min-height: 860px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 34px;
+        background: linear-gradient(180deg, #10131c 0%, #08090d 100%);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      .screen {
+        padding: 24px;
+      }
+
+      .top-card {
+        padding: 22px;
+        border-radius: 28px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+      }
+
+      .top-card h2 {
+        margin: 12px 0 0;
+        font-size: 34px;
+        line-height: 1.05;
+      }
+
+      .top-card p {
+        margin: 12px 0 0;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.55;
+        font-size: 14px;
+      }
+
+      .card {
+        margin-top: 18px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: var(--surface);
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 28px;
+      }
+
+      .card p,
+      .meta,
+      .small {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .small {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+      }
+
+      .label {
+        margin: 18px 0 8px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .input {
+        width: 100%;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        color: var(--surface-ink);
+        background: var(--bg-soft);
+        font-size: 15px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 140px;
+        padding: 15px 22px;
+        margin-top: 18px;
+        border-radius: 999px;
+        background: var(--accent);
+        font-weight: 700;
+      }
+
+      .button.ghost {
+        background: var(--surface-soft);
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .chip {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--surface-soft);
+        font-size: 13px;
+      }
+
+      .chip.active {
+        background: var(--accent);
+      }
+
+      .stats {
+        display: grid;
+        gap: 12px;
+      }
+
+      .stat {
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+      }
+
+      .message {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line);
+      }
+
+      .message strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .tabbar {
+        position: absolute;
+        inset: auto 0 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 12px 16px 18px;
+        border-top: 1px solid var(--line);
+        background: rgba(18, 22, 33, 0.98);
+      }
+
+      .tab {
+        display: grid;
+        justify-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tab.active {
+        color: var(--accent);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .avatar {
+        width: 56px;
+        height: 56px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        font-weight: 700;
+        background: var(--surface-soft);
+      }
+
+      .public-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      @media (max-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <section class="hero">
+        <div class="eyebrow">UKM / Figma Frontend Board</div>
+        <h1>Prompt-first anonymous inbox UI, captured as a single frontend board.</h1>
+        <p>
+          This board includes the login flow, the three onboarding steps, the owner-facing share, inbox, and settings tabs,
+          plus the public profile reply experience.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="frame-wrap">
+          <div class="frame-label">Login</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">UKM / Launch</div>
+                <h2>Anonymous prompts, not anonymous clutter.</h2>
+                <p>Ship your inbox, share your prompt, and bring people back with one clean loop.</p>
+              </section>
+              <section class="card">
+                <h3>Sign in</h3>
+                <p>Use email OTP for launch. In mock mode, the code is fixed so you can move through the full product locally.</p>
+                <div class="label">Email</div>
+                <div class="input">david@ukm.app</div>
+                <div class="button">Send code</div>
+                <div class="small" style="margin-top: 18px;">Backend: local mock mode</div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Age Gate</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">Step 1</div>
+                <h2>Confirm you’re 18 or older.</h2>
+                <p>UKM launch is hard-gated for adults only. Enter your birthday in ISO format so the backend rules stay simple.</p>
+              </section>
+              <section class="card">
+                <div class="label">Date of birth</div>
+                <div class="input">2001-04-17</div>
+                <div class="meta" style="margin-top: 10px;">Format: YYYY-MM-DD</div>
+                <div class="button">Continue</div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Profile Setup</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">Step 2</div>
+                <h2>Make the profile feel human.</h2>
+                <p>Keep this light. A name and optional avatar are enough for launch.</p>
+              </section>
+              <section class="card">
+                <div class="label">Display name</div>
+                <div class="input">David Mercer</div>
+                <div class="label">Avatar URL</div>
+                <div class="input">https://images.unsplash.com/photo-portrait</div>
+                <div class="button">Continue</div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Username</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">Step 3</div>
+                <h2>Pick the link people will actually tap.</h2>
+                <p>Short wins. The share link is your product loop, so make it recognizable and easy to pass around.</p>
+              </section>
+              <section class="card">
+                <div class="label">Username</div>
+                <div class="input">david</div>
+                <div class="meta" style="margin-top: 10px;">Only letters, numbers, and underscores.</div>
+                <div class="button">Claim username</div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Share Tab</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">Launch Mode On</div>
+                <h2>Prompt-first sharing wins the launch.</h2>
+                <p>Focus on real shares, fast replies, and one loop that can survive outside the product.</p>
+              </section>
+              <section class="card">
+                <div class="small">Active prompt</div>
+                <h3>Ask me anything</h3>
+                <p>People are answering this.</p>
+                <div class="chips">
+                  <span class="chip active">Ask me anything</span>
+                  <span class="chip">Be honest about me</span>
+                  <span class="chip">What do you think of me?</span>
+                </div>
+                <div class="chips">
+                  <span class="chip active">Copy A</span>
+                  <span class="chip">Copy B</span>
+                </div>
+                <div class="message">
+                  <strong>Share card</strong>
+                  Ask me anything on UKM. No names, just honesty.
+                  <div class="row" style="margin-top: 18px;">
+                    <span class="meta">@david</span>
+                    <span style="color: var(--accent); font-weight: 700;">Copy link</span>
+                  </div>
+                </div>
+                <div class="row" style="margin-top: 18px;">
+                  <div>
+                    <div class="meta">Momentum</div>
+                    <div style="font-size: 28px; font-weight: 700;">+8 responses</div>
+                  </div>
+                  <div class="button">Share now</div>
+                </div>
+              </section>
+              <section class="card">
+                <div class="small">Launch signal</div>
+                <div class="stats" style="margin-top: 14px;">
+                  <div class="stat"><span>Boost window</span><strong>18h left</strong></div>
+                  <div class="stat"><span>Organic messages</span><strong>8</strong></div>
+                  <div class="stat"><span>Shares logged</span><strong>14</strong></div>
+                  <div class="stat"><span>Public link</span><strong>ukm.app/u/david</strong></div>
+                </div>
+              </section>
+            </div>
+            <div class="tabbar">
+              <div class="tab active"><span class="dot"></span><span>Share</span></div>
+              <div class="tab"><span class="dot"></span><span>Inbox</span></div>
+              <div class="tab"><span class="dot"></span><span>Settings</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Inbox Tab</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="card" style="margin-top: 0;">
+                <div class="small">Inbox return hook</div>
+                <h3 style="margin-top: 12px;">You’re getting responses</h3>
+                <p>3 new since the last time you opened UKM.</p>
+              </section>
+              <div class="chips">
+                <span class="chip active">All</span>
+                <span class="chip">Unread</span>
+                <span class="chip">Filtered</span>
+                <span class="chip">Archived</span>
+              </div>
+              <section class="card">
+                <div class="small">Starter questions</div>
+                <p>These are system-owned icebreakers and do not count toward momentum.</p>
+                <div class="meta">• What should people ask you about?</div>
+                <div class="meta">• What made you join UKM?</div>
+              </section>
+              <section class="message">
+                <strong>Unread • Mar 18, 2026</strong>
+                You make people feel comfortable fast. Lean into that.
+              </section>
+              <section class="message">
+                <strong>Read • Mar 17, 2026</strong>
+                You seem fun, but a little hard to read at first.
+              </section>
+              <section class="message">
+                <strong>Read • Mar 16, 2026</strong>
+                Your taste is very specific in a good way.
+              </section>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><span class="dot"></span><span>Share</span></div>
+              <div class="tab active"><span class="dot"></span><span>Inbox</span></div>
+              <div class="tab"><span class="dot"></span><span>Settings</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Settings Tab</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="card" style="margin-top: 0;">
+                <h3>Settings</h3>
+                <p>Keep launch-mode settings simple: appearance, privacy, and the inbox controls that materially affect trust.</p>
+              </section>
+              <section class="card">
+                <div class="small">Appearance</div>
+                <div class="chips">
+                  <span class="chip">Light</span>
+                  <span class="chip">Dark</span>
+                  <span class="chip active">System</span>
+                </div>
+              </section>
+              <section class="card">
+                <div class="small">Hidden words</div>
+                <div class="label">Add a hidden word</div>
+                <div class="input">weirdly mean</div>
+                <div class="button">Add word</div>
+                <div class="chips">
+                  <span class="chip">spam</span>
+                  <span class="chip">boring</span>
+                  <span class="chip">mean</span>
+                </div>
+              </section>
+              <section class="card">
+                <div class="small">Launch diagnostics</div>
+                <div class="stats" style="margin-top: 14px;">
+                  <div class="stat"><span>Backend mode</span><strong>mock</strong></div>
+                  <div class="stat"><span>Launch mode</span><strong>enabled</strong></div>
+                  <div class="stat"><span>Signed in as</span><strong>david@ukm.app</strong></div>
+                </div>
+              </section>
+            </div>
+            <div class="tabbar">
+              <div class="tab"><span class="dot"></span><span>Share</span></div>
+              <div class="tab"><span class="dot"></span><span>Inbox</span></div>
+              <div class="tab active"><span class="dot"></span><span>Settings</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="frame-wrap">
+          <div class="frame-label">Public Profile</div>
+          <div class="phone">
+            <div class="screen">
+              <section class="top-card">
+                <div class="eyebrow">@david</div>
+                <h2>Be honest about me</h2>
+                <p>People are answering this.</p>
+              </section>
+              <section class="card">
+                <div class="public-head">
+                  <div class="avatar">D</div>
+                  <div>
+                    <div style="font-size: 28px; font-weight: 700;">David Mercer</div>
+                    <div class="meta">@david</div>
+                  </div>
+                </div>
+                <p style="margin-top: 16px;">Reply anonymously to the prompt below. No account, no name, just one honest answer.</p>
+              </section>
+              <section class="card">
+                <div class="small">Suggested replies</div>
+                <div class="chips">
+                  <span class="chip">First impression?</span>
+                  <span class="chip">What vibe do I give off?</span>
+                  <span class="chip">What would you change about me?</span>
+                </div>
+                <div class="label">Your anonymous reply</div>
+                <div class="input" style="min-height: 110px; border-radius: 22px;">
+                  You come across as thoughtful, but a little intimidating at first.
+                </div>
+                <div class="button">Send anonymously</div>
+              </section>
+              <section class="card">
+                <h3>Sent.</h3>
+                <p>Your reply is on the way. If you want to keep the loop alive, send another while you’re here.</p>
+                <div class="button ghost">Send another</div>
+              </section>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
